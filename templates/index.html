@@ -4,67 +4,162 @@
     <meta charset="utf-8" />
     <title>Differentiable Rendering Demo</title>
     <style>
-      .container { display:flex; gap:16px; }
-      .box { border:1px solid #ccc; padding:8px; width:256px; text-align:center; }
-      img { max-width: 100%; height: auto; }
+      :root {
+        --box-width: 420px;
+        --box-padding: 12px;
+        --gap: 20px;
+        --bg: #fafafa;
+      }
+      html,body { height:100%; margin:0; font-family: Arial, Helvetica, sans-serif; background:var(--bg); color:#111 }
+      .page { display:flex; flex-direction:column; align-items:center; padding:20px; }
+      form { background:white; padding:12px 16px; border-radius:8px; box-shadow:0 1px 6px rgba(0,0,0,0.06); }
+      .three-col { display:flex; gap:var(--gap); justify-content:center; align-items:flex-start; margin-bottom:18px; }
+      .box { background:white; border-radius:8px; padding:var(--box-padding); box-shadow:0 1px 8px rgba(0,0,0,0.08); }
+      .box.large { width:var(--box-width); text-align:center; }
+      .box .label { font-weight:600; margin-bottom:8px; }
+      img { max-width:100%; height:auto; display:block; margin:0 auto; border-radius:4px; }
+      .centered { text-align:center; max-width:850px; margin:0 auto; }
+      .frame-viewer img { max-width:720px; height:auto; border-radius:6px; }
+      .frame-controls { margin-top:8px; display:flex; gap:8px; justify-content:center; align-items:center; }
+      .slider { width:100%; max-width:720px; margin-top:8px; }
+      .label-small { font-size:0.9rem; color:#444 }
     </style>
   </head>
   <body>
-    <h1>Differentiable Rendering</h1>
-    <form method="post" enctype="multipart/form-data">
-      <label>Upload image: <input type="file" name="image" accept="image/*" required></label><br>
-      <label>Shape type: 
-        <select name="shape_type">
-          <option value="gaussians">Gaussians</option>
-          <option value="circle">Circle</option>
-          <option value="rectangle">Rectangle</option>
-        </select>
-      </label>
-      <label>Num shapes: <input type="number" name="num_shapes" value="150"></label>
-      <label>Iters: <input type="number" name="iters" value="300"></label>
-      <button type="submit">Run</button>
+    <div class="page">
+    <h1 style="text-align: center;">Differentiable Rendering</h1>
+
+    <form method="post" enctype="multipart/form-data" style="text-align:center; margin-bottom:24px;">
+      <label style="display:block; margin-bottom:8px">Upload image: <input type="file" name="image" accept="image/*" required></label>
+      <div style="display:inline-flex; gap:12px; align-items:center;">
+        <label>Shape type:
+          <select name="shape_type">
+            <option value="gaussians">Gaussians</option>
+            <option value="circle">Circle</option>
+            <option value="rectangle">Rectangle</option>
+          </select>
+        </label>
+        <label>Num shapes: <input type="number" name="num_shapes" value="150" style="width:80px"></label>
+        <label>Iters: <input type="number" name="iters" value="300" style="width:80px"></label>
+        <button type="submit">Run</button>
+      </div>
     </form>
 
     {% if result %}
-    <h2>Results</h2>
-    <div class="container">
-      <div class="box">
-        <strong>Starting reconstruction</strong>
-        <br>
-        <img src="{{ result.start_url }}" alt="start">
+    <h2 style="text-align:center; margin-bottom:12px">Results</h2>
+
+    <div class="three-col">
+      <div class="box large center">
+        <div class="label">Starting (initial) reconstruction</div>
+        <img src="{{ result.start_url }}" alt="start" style="width:{{ result.img_width }}px; height:auto; max-width:100%;">
       </div>
-      <div class="box">
-        <strong>Final reconstruction</strong>
-        <br>
-        <img src="{{ result.final_url }}" alt="final">
+
+      <div class="box large center">
+        <div class="label">Final reconstruction</div>
+        <img src="{{ result.final_url }}" alt="final" style="width:{{ result.img_width }}px; height:auto; max-width:100%;">
       </div>
-      <div class="box">
-        <strong>Reference (uploaded)</strong>
-        <br>
-        <img src="{{ result.reference_url }}" alt="reference">
+
+      <div class="box large center">
+        <div class="label">Reference (uploaded)</div>
+        <img src="{{ result.reference_url }}" alt="reference" style="width:{{ result.img_width }}px; height:auto; max-width:100%;">
       </div>
     </div>
 
-    <h3>Animation</h3>
-    <div>
-      <img src="{{ result.gif_url }}" alt="animation" style="max-width:512px; display:block;">
-    </div>
+    <section class="centered">
+      <h3>Frames</h3>
 
-    <h3>Frames (slider)</h3>
-    <input id="frameRange" type="range" min="0" max="{{ result.num_frames - 1 }}" value="0" oninput="updateFrame(this.value)">
-    <div>
-      <img id="frameView" src="/{{ url_for('static', filename=result.frames_dir + '/frame_0000.png') }}" style="max-width:512px; display:block;">
-    </div>
+      <div class="frame-controls">
+        <button id="prevBtn">◀ Prev</button>
+        <button id="playBtn">Play</button>
+        <button id="pauseBtn" style="display:none">Pause</button>
+        <button id="nextBtn">Next ▶</button>
+        <span id="frameLabel">Frame 0 / {{ result.num_frames}}</span>
+      </div>
+
+      <input id="frameRange" class="slider" type="range" min="0" max="{{ result.num_frames - 1 }}" value="0">
+
+      <div style="display:flex; gap:20px; justify-content:center; align-items:flex-start; margin-top:12px; flex-wrap:wrap;">
+        <div class="frame-viewer">
+          <div class="label-small">Rendered frame</div>
+          <img id="frameView" src="{{ url_for('static', filename=result.frames_dir + '/frame_0000.png') }}" alt="frame" />
+        </div>
+        <div class="frame-viewer">
+          <div class="label-small">Loss up to this frame</div>
+          <img id="lossView" src="{{ url_for('static', filename=result.frames_dir + '/loss_0000.png') }}" alt="loss" />
+        </div>
+      </div>
+    </section>
 
     <script>
       const baseStatic = "{{ url_for('static', filename='') }}";
       const uid = "{{ result.uid }}";
+      const framesDir = uid + '_frames';
+      const numFrames = {{ result.num_frames }};
+      const losses = {{ result.loss_values | tojson | safe }};
+
+      const frameView = document.getElementById('frameView');
+      const lossView = document.getElementById('lossView');
+      const frameRange = document.getElementById('frameRange');
+      const frameLabel = document.getElementById('frameLabel');
+      const playBtn = document.getElementById('playBtn');
+      const pauseBtn = document.getElementById('pauseBtn');
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+
+      let playInterval = null;
+      let current = 0;
+
+      function framePath(i) {
+        const idx = String(i).padStart(6,'0');
+        return baseStatic + framesDir + '/frame_' + idx + '.png';
+      }
+
+      function lossPath(i) {
+        const idx = String(i).padStart(6,'0');
+        return baseStatic + framesDir + '/loss_' + idx + '.png';
+      }
+
       function updateFrame(i) {
-        const idx = String(i).padStart(4,'0');
-        const path = baseStatic + uid + '_frames/frame_' + idx + '.png';
-        document.getElementById('frameView').src = path;
+        current = Math.max(0, Math.min(numFrames - 1, Number(i)));
+        frameView.src = framePath(current);
+        lossView.src = lossPath(current);
+        frameRange.value = current;
+        const lossText = (losses && losses[current] !== undefined) ? losses[current].toFixed(6) : 'n/a';
+        frameLabel.textContent = `Rendered iteration: ${current} / ${numFrames - 1} — Loss: ${lossText}`;
+      }
+
+      frameRange.addEventListener('input', (e) => updateFrame(e.target.value));
+
+      function playFrames() {
+        if (playInterval) return;
+        playInterval = setInterval(() => {
+          current = (current + 1) % numFrames;
+          updateFrame(current);
+        }, 100);
+        playBtn.style.display = 'none';
+        pauseBtn.style.display = '';
+      }
+
+      function pauseFrames() {
+        clearInterval(playInterval);
+        playInterval = null;
+        playBtn.style.display = '';
+        pauseBtn.style.display = 'none';
+      }
+
+      prevBtn.addEventListener('click', () => { pauseFrames(); updateFrame(current - 1); });
+      nextBtn.addEventListener('click', () => { pauseFrames(); updateFrame(current + 1); });
+      playBtn.addEventListener('click', playFrames);
+      pauseBtn.addEventListener('click', pauseFrames);
+
+      // initialize
+      if (numFrames > 0) {
+        updateFrame(0);
+      } else {
+        frameLabel.textContent = 'No frames available';
       }
     </script>
     {% endif %}
+    </div>
   </body>
 </html>

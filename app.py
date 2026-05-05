@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for
 import os
 import uuid
-from werkzeug.utils import secure_filename
 import differentiable_rendering as dr
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploads")
@@ -21,15 +20,21 @@ def index():
         file = request.files.get("image")
         if not file:
             return redirect(request.url)
-        filename = secure_filename(file.filename)
+        filename = file.filename
         uid = uuid.uuid4().hex
         saved_name = f"{uid}_{filename}"
         saved_path = os.path.join(app.config["UPLOAD_FOLDER"], saved_name)
         file.save(saved_path)
 
-        # run renderer
+        # determine original image size and preserve it for rendering
+        from PIL import Image as PILImage
+
+        pil_img = PILImage.open(saved_path).convert("RGB")
+        width, height = pil_img.size
+
+        # run renderer using the uploaded image native size
         out_prefix = os.path.join(posix_static, uid)
-        target = dr.load_image(saved_path, size=128)
+        target = dr.load_image(saved_path, size=None)
         res = dr.optimize(
             target,
             shape_type=request.form.get("shape_type", "gaussians"),
@@ -40,6 +45,17 @@ def index():
         )
 
         paths = res["paths"]
+        # load numeric loss values if available
+        loss_values = []
+        try:
+            import json
+
+            lv_path = paths.get("loss_values", f"{out_prefix}_loss_values.json")
+            if os.path.exists(lv_path):
+                with open(lv_path, "r") as f:
+                    loss_values = json.load(f)
+        except Exception:
+            loss_values = []
         # build URLs for template
         uid_base = uid
         result = {
@@ -53,10 +69,13 @@ def index():
             ),
             "start_url": url_for("static", filename=f"{uid_base}_start.png"),
             "final_url": url_for("static", filename=f"{uid_base}_final.png"),
-            "gif_url": url_for("static", filename=f"{uid_base}.gif"),
+            "loss_url": url_for("static", filename=f"{uid_base}_loss.png"),
             "frames_dir": f"{uid_base}_frames",
             "num_frames": paths.get("num_frames", 0),
             "reference_url": f"/uploads/{saved_name}",
+            "img_width": width,
+            "img_height": height,
+            "loss_values": loss_values,
         }
     return render_template("index.html", result=result)
 
