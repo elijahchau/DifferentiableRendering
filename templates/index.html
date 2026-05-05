@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Differentiable Rendering Demo</title>
+    <style>
+      .container { display:flex; gap:16px; }
+      .box { border:1px solid #ccc; padding:8px; width:256px; text-align:center; }
+      img { max-width: 100%; height: auto; }
+    </style>
+  </head>
+  <body>
+    <h1>Differentiable Rendering</h1>
+    <form method="post" enctype="multipart/form-data">
+      <label>Upload image: <input type="file" name="image" accept="image/*" required></label><br>
+      <label>Shape type: 
+        <select name="shape_type">
+          <option value="gaussians">Gaussians</option>
+          <option value="circle">Circle</option>
+          <option value="rectangle">Rectangle</option>
+        </select>
+      </label>
+      <label>Num shapes: <input type="number" name="num_shapes" value="150"></label>
+      <label>Iters: <input type="number" name="iters" value="300"></label>
+      <button type="submit">Run</button>
+    </form>
+
+    {% if result %}
+    <h2>Results</h2>
+    <div class="container">
+      <div class="box">
+        <strong>Starting reconstruction</strong>
+        <br>
+        <img src="{{ result.start_url }}" alt="start">
+      </div>
+      <div class="box">
+        <strong>Final reconstruction</strong>
+        <br>
+        <img src="{{ result.final_url }}" alt="final">
+      </div>
+      <div class="box">
+        <strong>Reference (uploaded)</strong>
+        <br>
+        <img src="{{ result.reference_url }}" alt="reference">
+      </div>
+    </div>
+
+    <h3>Animation</h3>
+    <div>
+      <img src="{{ result.gif_url }}" alt="animation" style="max-width:512px; display:block;">
+    </div>
+
+    <h3>Frames (slider)</h3>
+    <input id="frameRange" type="range" min="0" max="{{ result.num_frames - 1 }}" value="0" oninput="updateFrame(this.value)">
+    <div>
+      <img id="frameView" src="/{{ url_for('static', filename=result.frames_dir + '/frame_0000.png') }}" style="max-width:512px; display:block;">
+    </div>
+
+    <script>
+      const baseStatic = "{{ url_for('static', filename='') }}";
+      const uid = "{{ result.uid }}";
+      function updateFrame(i) {
+        const idx = String(i).padStart(4,'0');
+        const path = baseStatic + uid + '_frames/frame_' + idx + '.png';
+        document.getElementById('frameView').src = path;
+      }
+    </script>
+    {% endif %}
+  </body>
+</html>
